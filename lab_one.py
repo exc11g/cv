@@ -105,7 +105,7 @@ pretrained1.fc = nn.Linear(pretrained1.fc.in_features, out_classes)
 pretrained2 = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.IMAGENET1K_V1)
 pretrained2.classifier[-1] = nn.Linear(pretrained2.classifier[-1].in_features, out_classes)
 
-def train_epoch(model, loader, loss_f, optimizer, device):
+def train_epoch(model, loader, loss_f, optimizer):
     model.train()
     loss_epoch = 0.0
     for x, y in loader:
@@ -120,7 +120,7 @@ def train_epoch(model, loader, loss_f, optimizer, device):
         loss_epoch += loss.item()
     return loss_epoch / len(loader)
 
-def f1_eval(model, loader, device):
+def f1_eval(model, loader):
     model.eval()
     X = []
     Y = []
@@ -137,7 +137,6 @@ def f1_eval(model, loader, device):
     return f1_score(Y, X, average='macro')
 
 def training(model, name, epochs=15):
-    model = copy.deepcopy(model)
     
     model.to(device)
     loss_f = nn.CrossEntropyLoss()
@@ -149,8 +148,8 @@ def training(model, name, epochs=15):
     best_f1 = 0.0
     
     for epoch in range(epochs):
-        loss = train_epoch(model, train_loader, loss_f, optimizer, device)
-        f1 = f1_eval(model, pred_loadel, device)
+        loss = train_epoch(model, train_loader, loss_f, optimizer)
+        f1 = f1_eval(model, pred_loadel)
         scheduler.step()
         
         best_f1 = max(best_f1, f1)
@@ -159,8 +158,35 @@ def training(model, name, epochs=15):
         
     return best_f1
 
-training(resnet, "ResNet18_Scratch", epochs=3)
+training(resnet, "ResNet18_Scratch", epochs=4)
 
-training(pretrained1, "ResNet50_Pretrained", epochs=3)
+# training(pretrained1, "ResNet50_Pretrained", epochs=3)
 
-training(pretrained2, "MobileNetV3_Pretrained", epochs=3)
+training(pretrained2, "MobileNetV3_Pretrained", epochs=2)
+
+input("Ready to test")
+
+
+def test_run(model):
+    model.to(device)
+
+    model.eval()
+    X = []
+    Y = []
+
+    with torch.no_grad():
+        for x, y in pred_loadel:
+            x, y = x.to(device), y.to(device)
+            outputs = model(x)
+            _, preds = torch.max(outputs, 1)
+            
+            X.extend(preds.cpu().numpy())
+            Y.extend(y.cpu().numpy())
+            
+    return f1_score(Y, X, average='macro')
+
+
+
+
+print("resnet f1 = ", test_run(resnet))
+print("MobileNetV3 f1 = ", test_run(pretrained2))
